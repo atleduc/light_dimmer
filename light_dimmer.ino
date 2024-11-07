@@ -1,6 +1,5 @@
-#include "IRremote.hpp"
+#include <IRLib.h>  
 
-#define IR_RECEIVE_PIN 2
 #define DECREASE_K 12
 #define INCREASE_K 16
 #define FULL_WHITE 13
@@ -11,10 +10,14 @@
 #define ON 7
 #define DECREASE_P 4
 #define INCREASE_P 5
-
 // Définition des broches
-const int pinWarm = 6;  // PWM pour W- (blanc chaud)
-const int pinCool = 5;  // PWM pour C- (blanc froid)
+#define pinWarm 0  // PWM pour W- (blanc chaud)
+#define pinCool 1  // PWM pour C- (blanc froid)
+#define IR_RECEIVE_PIN 5
+
+IRrecv IrReceiver(IR_RECEIVE_PIN);
+IRdecode Decoder; 
+
 const int potPin = A0;  // Potentiomètre connecté à l'entrée analogique A0
 int potValue;
 int coolValue = 127;  // Intensité du blanc froid
@@ -22,25 +25,26 @@ int warmValue = 127;  // Intensité du blanc chaud (inverse)
 int power, ratio;
 
 void setup() {
-  Serial.begin(9600);
-  IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK);
+  // Serial.begin(9600);
+  IrReceiver.enableIRIn();
   pinMode(pinWarm, OUTPUT);
   pinMode(pinCool, OUTPUT);
   pinMode(potPin, INPUT);
-  analogWrite(3, 255);
-  analogWrite(5, 255);
+  analogWrite(pinWarm, 255);
+  analogWrite(pinCool, 255);
   analogWrite(6, 255);
 }
 
 void loop() {
+  if (IrReceiver.GetResults(&Decoder)) {
 
-  if (IrReceiver.decode()) {
-    uint16_t command = IrReceiver.decodedIRData.command;
-    Serial.println(command);
-    delay(50);  // wait a bit
+    Decoder.decode();
+    uint16_t command = Decoder.value;
+    //Serial.println(command);
+    
     IrReceiver.resume();
     potValue = command;
-    power = coolValue + warmValue;
+    // power = coolValue + warmValue;
     ratio = coolValue / power;
       
     switch (potValue) {
@@ -96,6 +100,6 @@ void loop() {
   analogWrite(pinWarm, warmValue);  // Ajuster l'intensité des LED blanc chaud
   analogWrite(pinCool, coolValue);  // Ajuster l'intensité des LED blanc froid
 
-  Serial.print(warmValue);Serial.print(",");
-  Serial.println(coolValue);
+  // Serial.print(warmValue);Serial.print(",");
+  // Serial.println(coolValue);
 }
