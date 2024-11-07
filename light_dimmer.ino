@@ -1,4 +1,6 @@
 #include <IRLib.h>  
+#include <avr/eeprom.h>
+
 
 #define DECREASE_K 12
 #define INCREASE_K 16
@@ -14,6 +16,9 @@
 #define pinWarm 0  // PWM pour W- (blanc chaud)
 #define pinCool 1  // PWM pour C- (blanc froid)
 #define IR_RECEIVE_PIN 5
+// adresses de stockage des données
+#define WARM_ADDRESS 0
+#define COOL_ADDRESS 1
 
 IRrecv IrReceiver(IR_RECEIVE_PIN);
 IRdecode Decoder; 
@@ -22,7 +27,9 @@ const int potPin = A0;  // Potentiomètre connecté à l'entrée analogique A0
 int potValue;
 int coolValue = 127;  // Intensité du blanc froid
 int warmValue = 127;  // Intensité du blanc chaud (inverse)
-int power, ratio;
+int power;
+bool hasChanged = false;
+unsigned long time;
 
 void setup() {
   // Serial.begin(9600);
@@ -30,65 +37,78 @@ void setup() {
   pinMode(pinWarm, OUTPUT);
   pinMode(pinCool, OUTPUT);
   pinMode(potPin, INPUT);
-  analogWrite(pinWarm, 255);
-  analogWrite(pinCool, 255);
+  coolValue=eeprom_read_byte( (uint8_t*) COOL_ADDRESS );
+  warmValue=eeprom_read_byte( (uint8_t*) WARM_ADDRESS);
+  analogWrite(pinCool, coolValue);
+  analogWrite(pinWarm, warmValue);
   analogWrite(6, 255);
 }
 
 void loop() {
+   if(hasChanged) {
+    if (millis() - time > 10000) {
+      // Serial.println("save to EEprom");
+      eeprom_write_byte( (uint8_t*) WARM_ADDRESS, warmValue );
+      eeprom_write_byte( (uint8_t*) COOL_ADDRESS, coolValue );
+      hasChanged = false;
+    }
+  }
   if (IrReceiver.GetResults(&Decoder)) {
 
     Decoder.decode();
     uint16_t command = Decoder.value;
     //Serial.println(command);
-    
+    time = millis();
     IrReceiver.resume();
     potValue = command;
-    // power = coolValue + warmValue;
-    ratio = coolValue / power;
-      
+    power = coolValue + warmValue;  
     switch (potValue) {
       case DECREASE_K:
         coolValue++;
         warmValue = power - coolValue;
+        hasChanged = true;
         break;
       case INCREASE_K:
         coolValue--;
         warmValue = power - coolValue;
+        hasChanged = true;
         break;
       case DECREASE_P:
-        if (coolValue > 0 && warmValue > 0) {
         coolValue--;
         warmValue--;
-        }
+        hasChanged = true;
         break;
       case INCREASE_P:
-        if (coolValue < 255 && warmValue < 255) {
-          coolValue++;
-          warmValue++;
-        }
+        coolValue++;
+        warmValue++;
+        hasChanged = true;
         break;
       case FULL_WHITE:
         coolValue=power;
         warmValue=0;
+        hasChanged = true;
         break;
       case MEDIUM_WHITE:
         coolValue=3*(power)/4;
         warmValue=power/4;
+        hasChanged = true;
         break;
       case MEDIUM_YELLOW:
         coolValue=power/2;
         warmValue=power/2;
+        hasChanged = true;
         break;
       case FULL_YELLOW:
         coolValue=0;
         warmValue=power;
+        hasChanged = true;
         break;
       case OFF:
         coolValue=0;
         break;
       case ON:
-        coolValue=0;
+        coolValue=eeprom_read_byte( (uint8_t*) COOL_ADDRESS );
+        warmValue=eeprom_read_byte( (uint8_t*) WARM_ADDRESS);
         break;
     }
     
